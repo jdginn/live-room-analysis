@@ -44,7 +44,7 @@ def load_experiment_data(expdir):
     row["angle_diff"] = abs(row["l_reflector_angle"] - row["r_reflector_angle"])
     row["total_depth"] = row["l_reflector_depth"] + row["r_reflector_depth"]
     row["avg_depth"] = row["total_depth"] / 2
-    row["num_total"] = row["l_num_reflectors"] + row["r_num_reflectors"]
+    row["total_reflectors"] = row["l_num_reflectors"] + row["r_num_reflectors"]
     row["num_diff"] = abs(row["l_num_reflectors"] - row["r_num_reflectors"])
     row["spacing_asym"] = abs(row["l_finish_offset"] - row["r_finish_offset"]) + abs(
         row["l_start_offset"] - row["r_start_offset"]
@@ -63,13 +63,39 @@ def load_experiment_data(expdir):
         except Exception:
             return None
 
+    def mean(items: list[float | None]) -> float:
+        itemsNotNone = [i for i in items if i is not None]
+        return sum(itemsNotNone) / len(items)
+
     results = summary.get("results", {})
-    row["DrumDeadT30"] = mean_metric(results, "window_drums_OH_back_cardioid", "t30_ms")
-    row["DrumLiveT30"] = mean_metric(results, "window_drums_OH_cardioid", "t30_ms")
-    row["DrumDiffusion"] = mean_metric(
-        results, "window_drums_OH_back_cardioid", "echo_density_score"
+    row["DrumDeadT30"] = mean(
+        [
+            mean_metric(results, "window_drums_OH_back_cardioid", "t30_ms"),
+            mean_metric(results, "window_drums_OH_back_cardioid", "t30_ms"),
+            mean_metric(results, "window_drums_OH_omni", "t30_ms"),
+        ]
     )
-    row["VocalT30"] = mean_metric(results, "vox_center_to_window", "t30_ms")
+    row["DrumLiveT30"] = mean(
+        [
+            mean_metric(results, "door_drums_OH_cardioid", "t30_ms"),
+            mean_metric(results, "door_drums_OH_cardioid", "t30_ms"),
+            mean_metric(results, "window_drums_far_omni", "t30_ms"),
+        ]
+    )
+    row["DrumDiffusion"] = mean(
+        [
+            mean_metric(results, "window_drums_OH_back_cardioid", "echo_density_score"),
+            mean_metric(results, "window_drums_OH_omni", "echo_density_score"),
+            mean_metric(results, "door_drums_OH_cardioid", "echo_density_score"),
+            mean_metric(results, "door_drums_OH_omni", "echo_density_score"),
+            mean_metric(results, "window_drums_far_omni", "echo_density_score"),
+        ]
+    )
+    row["VocalCenterToWindowT30"] = mean_metric(
+        results, "vox_center_to_window", "t30_ms"
+    )
+    row["VocalDoorToWindowT30"] = mean_metric(results, "vox_door_to_window", "t30_ms")
+    row["VocalDeadT30"] = mean_metric(results, "vox_window_to_door", "t30_ms")
     row["VocalDiffusion"] = mean_metric(
         results, "vox_center_to_window", "echo_density_score"
     )
