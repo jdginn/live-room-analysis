@@ -52,7 +52,7 @@ def load_experiment_data(expdir):
 
     # Helper for metric extraction (mean across standard frequencies)
     def mean_metric(results, key, metric):
-        freq_keys = ["500", "1000", "2000", "4000"]
+        freq_keys = ["1000", "2000", "4000"]
         try:
             values = [
                 results[key]["frequencies"][f][metric]
