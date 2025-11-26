@@ -41,3 +41,7 @@ ENV/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Generated output files
+candidate_parameters.csv
+
