@@ -57,8 +57,12 @@ ALL_FEATURES = INPUT_FEATURES + DERIVED_FEATURES
 OUTPUT_METRICS = [
     "DrumDeadT30",
     "DrumLiveT30",
+    "DrumDeltaT30",
     "DrumDiffusion",
-    "VocalT30",
+    "VocalDeadT30",
+    "VocalDoorToWindowT30",
+    "VocalCenterToWindowT30",
+    "VocalDiffT30",
     "VocalDiffusion",
 ]
 
@@ -105,14 +109,16 @@ def compute_correlations(
         features: List of feature column names. If None, uses ALL_FEATURES.
 
     Returns:
-        DataFrame with columns ['feature', 'pearson_r', 'pearson_p', 'spearman_r', 'spearman_p', 
+        DataFrame with columns ['feature', 'pearson_r', 'pearson_p', 'spearman_r', 'spearman_p',
         'abs_pearson', 'abs_spearman'] sorted by absolute Pearson correlation (descending).
     """
     if features is None:
         features = [f for f in ALL_FEATURES if f in df.columns]
 
     if fom not in df.columns:
-        raise ValueError(f"FOM '{fom}' not found in dataframe. Available columns: {list(df.columns)}")
+        raise ValueError(
+            f"FOM '{fom}' not found in dataframe. Available columns: {list(df.columns)}"
+        )
 
     results = []
 
@@ -135,26 +141,32 @@ def compute_correlations(
         # Compute Spearman correlation
         spearman_r, spearman_p = stats.spearmanr(feat_values, fom_vals)
 
-        results.append({
-            "feature": feature,
-            "pearson_r": pearson_r,
-            "pearson_p": pearson_p,
-            "spearman_r": spearman_r,
-            "spearman_p": spearman_p,
-            "abs_pearson": abs(pearson_r),
-            "abs_spearman": abs(spearman_r),
-        })
+        results.append(
+            {
+                "feature": feature,
+                "pearson_r": pearson_r,
+                "pearson_p": pearson_p,
+                "spearman_r": spearman_r,
+                "spearman_p": spearman_p,
+                "abs_pearson": abs(pearson_r),
+                "abs_spearman": abs(spearman_r),
+            }
+        )
 
     results_df = pd.DataFrame(results)
 
     # Sort by absolute Pearson correlation (descending)
     if not results_df.empty:
-        results_df = results_df.sort_values("abs_pearson", ascending=False).reset_index(drop=True)
+        results_df = results_df.sort_values("abs_pearson", ascending=False).reset_index(
+            drop=True
+        )
 
     return results_df
 
 
-def print_correlations(correlations: pd.DataFrame, fom: str, top_n: Optional[int] = None) -> None:
+def print_correlations(
+    correlations: pd.DataFrame, fom: str, top_n: Optional[int] = None
+) -> None:
     """
     Print correlation results in a formatted table.
 
@@ -175,7 +187,9 @@ def print_correlations(correlations: pd.DataFrame, fom: str, top_n: Optional[int
     if top_n is not None:
         display_df = display_df.head(top_n)
 
-    print(f"\n{'Feature':<25} {'Pearson r':>12} {'p-value':>12} {'Spearman r':>12} {'p-value':>12}")
+    print(
+        f"\n{'Feature':<25} {'Pearson r':>12} {'p-value':>12} {'Spearman r':>12} {'p-value':>12}"
+    )
     print("-" * 73)
 
     for _, row in display_df.iterrows():
@@ -274,7 +288,13 @@ def plot_correlation_bars(
     for idx, (_, row) in enumerate(plot_df.iterrows()):
         if row["pearson_p"] < 0.05:
             x_pos = row["pearson_r"]
-            ax.annotate("*", (x_pos, idx - bar_height / 2), fontsize=12, ha="center", va="bottom")
+            ax.annotate(
+                "*",
+                (x_pos, idx - bar_height / 2),
+                fontsize=12,
+                ha="center",
+                va="bottom",
+            )
 
     plt.tight_layout()
 
@@ -446,7 +466,9 @@ def plot_scatter(
 
     ax.set_xlabel(feature)
     ax.set_ylabel(fom)
-    ax.set_title(f"{feature} vs {fom}\nPearson r = {pearson_r:.3f} (p = {pearson_p:.4f})")
+    ax.set_title(
+        f"{feature} vs {fom}\nPearson r = {pearson_r:.3f} (p = {pearson_p:.4f})"
+    )
     ax.legend()
 
     plt.tight_layout()
@@ -508,7 +530,14 @@ def plot_scatter_matrix(
         y = df.loc[valid_mask, fom]
 
         if len(x) < 3:
-            ax.text(0.5, 0.5, "Insufficient data", ha="center", va="center", transform=ax.transAxes)
+            ax.text(
+                0.5,
+                0.5,
+                "Insufficient data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
             ax.set_title(f"{feature} vs {fom}")
             continue
 
@@ -532,7 +561,9 @@ def plot_scatter_matrix(
     for idx in range(n_features, len(axes)):
         axes[idx].set_visible(False)
 
-    fig.suptitle(f"Scatter Plots: Top Features vs {fom}", fontsize=14, fontweight="bold")
+    fig.suptitle(
+        f"Scatter Plots: Top Features vs {fom}", fontsize=14, fontweight="bold"
+    )
     plt.tight_layout()
 
     if save_path:
@@ -540,6 +571,37 @@ def plot_scatter_matrix(
         print(f"Saved scatter matrix to {save_path}")
 
     return fig
+
+
+def preprocess_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess the DataFrame by ensuring all required columns are present.
+
+    Args:
+        df: DataFrame with experiment data.
+
+    Returns:
+        Preprocessed DataFrame.
+    """
+    # Drum delta
+    df["DrumDeltaT30"] = df["DrumLiveT30"] - df["DrumDeadT30"]
+
+    # Vocal delta, using elementwise max
+    if (
+        "VocalDoorToWindowT30" in df
+        and "VocalCenterToWindowT30" in df
+        and "VocalDeadT30" in df
+    ):
+        df["VocalDeltaT30"] = (
+            np.maximum(df["VocalDoorToWindowT30"], df["VocalCenterToWindowT30"])
+            - df["VocalDeadT30"]
+        )
+    else:
+        # Optionally, raise an error or warning
+        print("Warning: Some vocal columns are missing in the DataFrame.")
+        df["VocalDeltaT30"] = np.nan
+
+    return df
 
 
 def run_full_analysis(
@@ -573,6 +635,8 @@ def run_full_analysis(
     df = load_data(csv_path)
     print(f"Loaded {len(df)} experiments with {len(df.columns)} columns")
 
+    df = preprocess_dataframe(df)
+
     # Show available FOMs
     available_foms = get_available_foms(df)
     print(f"\nAvailable FOMs: {available_foms}")
@@ -598,18 +662,24 @@ def run_full_analysis(
 
         plot_correlation_bars(correlations, fom, top_n=top_n, save_path=bar_save)
         plot_correlation_heatmap(df, fom, save_path=heatmap_save)
-        plot_top_correlations_only(correlations, fom, top_n=min(top_n, 10), save_path=top_save)
+        plot_top_correlations_only(
+            correlations, fom, top_n=min(top_n, 10), save_path=top_save
+        )
 
         # Generate scatter plots if requested
         if scatter:
             if scatter_feature:
                 # Single feature scatter plot
-                scatter_save = f"scatter_{scatter_feature}_vs_{fom}.png" if save_plots else None
+                scatter_save = (
+                    f"scatter_{scatter_feature}_vs_{fom}.png" if save_plots else None
+                )
                 plot_scatter(df, scatter_feature, fom, save_path=scatter_save)
             else:
                 # Scatter matrix of top features
                 scatter_save = f"scatter_matrix_{fom}.png" if save_plots else None
-                plot_scatter_matrix(df, fom, top_n=min(4, top_n), save_path=scatter_save)
+                plot_scatter_matrix(
+                    df, fom, top_n=min(4, top_n), save_path=scatter_save
+                )
 
         if show_plots:
             plt.show()
@@ -671,6 +741,7 @@ def main():
 
     if args.list_foms:
         df = load_data(args.csv)
+        df = preprocess_dataframe(df)
         foms = get_available_foms(df)
         print("Available FOMs:")
         for fom in foms:
