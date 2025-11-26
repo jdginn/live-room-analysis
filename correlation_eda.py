@@ -401,12 +401,155 @@ def plot_top_correlations_only(
     return fig
 
 
+def plot_scatter(
+    df: pd.DataFrame,
+    feature: str,
+    fom: str,
+    figsize: tuple = (8, 6),
+    save_path: Optional[str] = None,
+) -> Optional[plt.Figure]:
+    """
+    Create a scatter plot of a feature vs the FOM with a trend line.
+
+    Args:
+        df: DataFrame with experiment data.
+        feature: Name of the feature column (x-axis).
+        fom: Name of the figure of merit column (y-axis).
+        figsize: Figure size tuple.
+        save_path: If provided, save figure to this path.
+
+    Returns:
+        matplotlib Figure object, or None if insufficient data.
+    """
+    # Get valid data points
+    valid_mask = df[feature].notna() & df[fom].notna()
+    x = df.loc[valid_mask, feature]
+    y = df.loc[valid_mask, fom]
+
+    if len(x) < 3:
+        print(f"Not enough data points for scatter plot of {feature} vs {fom}")
+        return None
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Scatter plot
+    ax.scatter(x, y, alpha=0.5, edgecolors="black", linewidths=0.5)
+
+    # Add trend line
+    z = np.polyfit(x, y, 1)
+    p = np.poly1d(z)
+    x_line = np.linspace(x.min(), x.max(), 100)
+    ax.plot(x_line, p(x_line), "r--", alpha=0.8, label=f"Trend line")
+
+    # Compute correlation for display
+    pearson_r, pearson_p = stats.pearsonr(x, y)
+
+    ax.set_xlabel(feature)
+    ax.set_ylabel(fom)
+    ax.set_title(f"{feature} vs {fom}\nPearson r = {pearson_r:.3f} (p = {pearson_p:.4f})")
+    ax.legend()
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved scatter plot to {save_path}")
+
+    return fig
+
+
+def plot_scatter_matrix(
+    df: pd.DataFrame,
+    fom: str,
+    features: Optional[list] = None,
+    top_n: int = 4,
+    figsize: tuple = (12, 10),
+    save_path: Optional[str] = None,
+) -> Optional[plt.Figure]:
+    """
+    Create a grid of scatter plots for top correlated features vs FOM.
+
+    Args:
+        df: DataFrame with experiment data.
+        fom: Name of the figure of merit column.
+        features: List of features to plot. If None, uses top_n from correlation analysis.
+        top_n: Number of top features to plot (used if features is None).
+        figsize: Figure size tuple.
+        save_path: If provided, save figure to this path.
+
+    Returns:
+        matplotlib Figure object, or None if no features to plot.
+    """
+    if features is None:
+        # Get top correlated features
+        correlations = compute_correlations(df, fom)
+        features = correlations.head(top_n)["feature"].tolist()
+
+    n_features = len(features)
+    if n_features == 0:
+        print("No features to plot.")
+        return None
+
+    # Calculate grid dimensions
+    n_cols = min(2, n_features)
+    n_rows = (n_features + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+    if n_features == 1:
+        axes = np.array([axes])
+    axes = axes.flatten()
+
+    for idx, feature in enumerate(features):
+        ax = axes[idx]
+
+        # Get valid data points
+        valid_mask = df[feature].notna() & df[fom].notna()
+        x = df.loc[valid_mask, feature]
+        y = df.loc[valid_mask, fom]
+
+        if len(x) < 3:
+            ax.text(0.5, 0.5, "Insufficient data", ha="center", va="center", transform=ax.transAxes)
+            ax.set_title(f"{feature} vs {fom}")
+            continue
+
+        # Scatter plot
+        ax.scatter(x, y, alpha=0.5, edgecolors="black", linewidths=0.5)
+
+        # Add trend line
+        z = np.polyfit(x, y, 1)
+        p = np.poly1d(z)
+        x_line = np.linspace(x.min(), x.max(), 100)
+        ax.plot(x_line, p(x_line), "r--", alpha=0.8)
+
+        # Compute correlation for display
+        pearson_r, _ = stats.pearsonr(x, y)
+
+        ax.set_xlabel(feature)
+        ax.set_ylabel(fom)
+        ax.set_title(f"{feature} (r={pearson_r:.3f})")
+
+    # Hide unused subplots
+    for idx in range(n_features, len(axes)):
+        axes[idx].set_visible(False)
+
+    fig.suptitle(f"Scatter Plots: Top Features vs {fom}", fontsize=14, fontweight="bold")
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved scatter matrix to {save_path}")
+
+    return fig
+
+
 def run_full_analysis(
     csv_path: str = "experiment_metrics.csv",
     fom: str = "DrumDeadT30",
     top_n: int = 15,
     show_plots: bool = True,
     save_plots: bool = False,
+    scatter: bool = False,
+    scatter_feature: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Run a complete correlation analysis and display results.
@@ -419,6 +562,8 @@ def run_full_analysis(
         top_n: Number of top features to highlight.
         show_plots: Whether to display matplotlib plots.
         save_plots: Whether to save plots to files.
+        scatter: Whether to generate scatter plots for top features.
+        scatter_feature: If provided, create a scatter plot for this specific feature.
 
     Returns:
         DataFrame with correlation results.
@@ -454,6 +599,17 @@ def run_full_analysis(
         plot_correlation_bars(correlations, fom, top_n=top_n, save_path=bar_save)
         plot_correlation_heatmap(df, fom, save_path=heatmap_save)
         plot_top_correlations_only(correlations, fom, top_n=min(top_n, 10), save_path=top_save)
+
+        # Generate scatter plots if requested
+        if scatter:
+            if scatter_feature:
+                # Single feature scatter plot
+                scatter_save = f"scatter_{scatter_feature}_vs_{fom}.png" if save_plots else None
+                plot_scatter(df, scatter_feature, fom, save_path=scatter_save)
+            else:
+                # Scatter matrix of top features
+                scatter_save = f"scatter_matrix_{fom}.png" if save_plots else None
+                plot_scatter_matrix(df, fom, top_n=min(4, top_n), save_path=scatter_save)
 
         if show_plots:
             plt.show()
@@ -499,6 +655,17 @@ def main():
         action="store_true",
         help="List available FOMs and exit",
     )
+    parser.add_argument(
+        "--scatter",
+        action="store_true",
+        help="Generate scatter plots for top correlated features vs FOM",
+    )
+    parser.add_argument(
+        "--scatter-feature",
+        type=str,
+        default=None,
+        help="Generate a scatter plot for a specific feature vs FOM (e.g., avg_angle)",
+    )
 
     args = parser.parse_args()
 
@@ -516,6 +683,8 @@ def main():
         top_n=args.top,
         show_plots=not args.no_show,
         save_plots=args.save_plots,
+        scatter=args.scatter or args.scatter_feature is not None,
+        scatter_feature=args.scatter_feature,
     )
 
 
