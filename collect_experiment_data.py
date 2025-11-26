@@ -41,14 +41,65 @@ def load_experiment_data(expdir):
 
     # Derived parameters
     row["avg_angle"] = (row["l_reflector_angle"] + row["r_reflector_angle"]) / 2
-    row["angle_diff"] = abs(row["l_reflector_angle"] - row["r_reflector_angle"])
     row["total_depth"] = row["l_reflector_depth"] + row["r_reflector_depth"]
     row["avg_depth"] = row["total_depth"] / 2
     row["total_reflectors"] = row["l_num_reflectors"] + row["r_num_reflectors"]
-    row["num_diff"] = abs(row["l_num_reflectors"] - row["r_num_reflectors"])
-    row["spacing_asym"] = abs(row["l_finish_offset"] - row["r_finish_offset"]) + abs(
-        row["l_start_offset"] - row["r_start_offset"]
-    )
+
+    if row["l_reflector_angle"] >= row["r_reflector_angle"]:
+        # Left is larger angle side
+        row["LA_angle"] = row["l_reflector_angle"]
+        row["SA_angle"] = row["r_reflector_angle"]
+        row["LA_num_reflectors"] = row["l_num_reflectors"]
+        row["SA_num_reflectors"] = row["r_num_reflectors"]
+        row["LA_depth"] = row["l_reflector_depth"]
+        row["SA_depth"] = row["r_reflector_depth"]
+        row["LA_start_offset"] = row["l_start_offset"]
+        row["SA_start_offset"] = row["r_start_offset"]
+        row["LA_finish_offset"] = row["l_finish_offset"]
+        row["SA_finish_offset"] = row["r_finish_offset"]
+    else:
+        # Right is larger angle side
+        row["LA_angle"] = row["r_reflector_angle"]
+        row["SA_angle"] = row["l_reflector_angle"]
+        row["LA_num_reflectors"] = row["r_num_reflectors"]
+        row["SA_num_reflectors"] = row["l_num_reflectors"]
+        row["LA_depth"] = row["r_reflector_depth"]
+        row["SA_depth"] = row["l_reflector_depth"]
+        row["LA_start_offset"] = row["r_start_offset"]
+        row["SA_start_offset"] = row["l_start_offset"]
+        row["LA_finish_offset"] = row["r_finish_offset"]
+        row["SA_finish_offset"] = row["l_finish_offset"]
+
+    row["angle_diff"] = row["LA_angle"] - row["SA_angle"]
+    row["depth_diff"] = row["LA_depth"] - row["SA_depth"]
+    row["num_reflectors_diff"] = row["LA_num_reflectors"] - row["SA_num_reflectors"]
+    row["start_offset_diff"] = row["LA_start_offset"] - row["SA_start_offset"]
+    row["finish_offset_diff"] = row["LA_finish_offset"] - row["SA_finish_offset"]
+
+    MAPPED_FEATURES = [
+        "LA_angle",
+        "SA_angle",
+        "LA_num_reflectors",
+        "SA_num_reflectors",
+        "LA_depth",
+        "SA_depth",
+        "LA_start_offset",
+        "SA_start_offset",
+        "LA_finish_offset",
+        "SA_finish_offset",
+    ]
+
+    DERIVED_FEAUTURES = [
+        "avg_angle",
+        "total_depth",
+        "avg_depth",
+        "total_reflectors",
+        "angle_diff",
+        "depth_diff",
+        "num_reflectors_diff",
+        "start_offset_diff",
+        "finish_offset_diff",
+    ]
 
     # Helper for metric extraction (mean across standard frequencies)
     def mean_metric(results, key, metric):
