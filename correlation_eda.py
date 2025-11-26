@@ -62,7 +62,7 @@ OUTPUT_METRICS = [
     "VocalDeadT30",
     "VocalDoorToWindowT30",
     "VocalCenterToWindowT30",
-    "VocalDiffT30",
+    "VocalDeltaT30",
     "VocalDiffusion",
 ]
 
